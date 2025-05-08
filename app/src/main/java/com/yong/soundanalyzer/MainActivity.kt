@@ -199,7 +199,6 @@ class MainActivity: AppCompatActivity() {
 
             Log.d(LOG_TAG_DECODE, "Decoder Spec: Channel Count - [$audioChannelCount] / Sample Rate - [$audioSampleRate]")
 
-
             val bufferInfo = MediaCodec.BufferInfo()
             val bufferSampleCount = audioClassifier.requiredInputBufferSize.toInt()
             val bufferSize = bufferSampleCount * audioChannelCount * 2
@@ -223,6 +222,9 @@ class MainActivity: AppCompatActivity() {
                     outputBuffer.position(bufferInfo.offset)
                     outputBuffer.limit(bufferInfo.offset + bufferInfo.size)
 
+                    // TODO: PCM Channel-Count & Sample-Rate 조정 필요
+                    // YAMNet은 16kHz 1-ch 오디오를 처리하도록 되어있기에, 리샘플링이 필요함
+                    // 일단 원본 PCM을 그대로 넣어도 정확도에 큰 문제가 발생하지는 않는 듯
                     while(outputBuffer.remaining() >= audioFrameSize) {
                         if(classifierBuffer.remaining() < audioFrameSize) {
                             classifierBuffer.flip()
