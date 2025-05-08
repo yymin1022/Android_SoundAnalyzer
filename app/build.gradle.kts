@@ -36,6 +36,8 @@ android {
 }
 
 dependencies {
+    implementation(libs.tensorflow.lite.support)
+    implementation(libs.tensorflow.lite.task.audio)
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
