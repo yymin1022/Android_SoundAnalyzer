@@ -45,7 +45,7 @@ class MainActivity: AppCompatActivity() {
     private lateinit var layoutResult: LinearLayout
     private lateinit var tvAudioPath: TextView
 
-    private lateinit var audioClassifier: AudioClassifier
+    private var audioClassifier: AudioClassifier? = null
 
     private var audioDecoder: MediaCodec? = null
     private var audioFormat: MediaFormat? = null
@@ -54,7 +54,7 @@ class MainActivity: AppCompatActivity() {
     private val detectedRanges = mutableListOf<Pair<Long, Long>>()
     private var pcmChannel: Channel<Pair<Long, ShortArray>>? = null
 
-    private val filteredSoundLabels = setOf(
+    private val humanSoundLabels = setOf(
         "speech", "laughter", "cough", "baby_crying", "snoring",
         "gasp", "sneeze", "yell", "screaming", "crying_sobbing"
     )
@@ -70,19 +70,21 @@ class MainActivity: AppCompatActivity() {
         }
 
         initUI()
-        initTflite()
+        initEventListener()
     }
 
     private fun initUI() {
         btnSelect = findViewById(R.id.main_btn_select)
+        layoutResult = findViewById(R.id.main_layout_result)
+        tvAudioPath = findViewById(R.id.main_tv_audio_path)
+    }
+
+    private fun initEventListener() {
         btnSelect.setOnClickListener {
             Log.d(LOG_TAG_SELECT, "Select Started")
             val mimeType = setOf(MIMETYPE_AUDIO, MIMETYPE_VIDEO)
             selectAudioFile.launch(mimeType.joinToString(","))
         }
-
-        layoutResult = findViewById(R.id.main_layout_result)
-        tvAudioPath = findViewById(R.id.main_tv_audio_path)
     }
 
     private fun updateUI(filepath: String) {
@@ -95,33 +97,24 @@ class MainActivity: AppCompatActivity() {
     ) { uri: Uri? ->
         uri?.let {
             Log.d(LOG_TAG_SELECT, "Select Done: $it")
+
             updateUI(it.path ?: "Unknown Path")
-            processAudioFile(it)
+            startAudioProcessing(it)
         }
     }
 
-    private fun initTflite() {
-        audioClassifier = AudioClassifier.createFromFile(this, "yamnet.tflite")
-    }
-
-    private fun processAudioFile(uri: Uri) {
+    private fun startAudioProcessing(uri: Uri) {
         Log.d(LOG_TAG_PROCESS, "Process Started: $uri")
 
-        // TODO: Audio Processing Implementation
-        // Decoding -> [PCM Data] -> Analyze -> [Result Data]
+        // Decoding -> [PCM Data] -> Classify w/ Tensorflow Lite YAMNet -> [Result Data]
 
-        val trackIdx = getAudioTrack(uri)
-        if(trackIdx < 0) return
-
-        val initialized = initDecoder()
-        if(!initialized) return
-
-        Log.d(LOG_TAG_DECODE, "Decoder Initialized for track [$trackIdx]")
+        var isInitialized = initClassifier() && initDecoder(uri)
+        if(!isInitialized) return
 
         pcmChannel = Channel<Pair<Long, ShortArray>>()
 
+        startClassifier()
         startDecoder()
-        startClassifying()
     }
 
     private fun getAudioTrack(uri: Uri): Int {
@@ -146,7 +139,24 @@ class MainActivity: AppCompatActivity() {
         return -1
     }
 
-    private fun initDecoder(): Boolean {
+    private fun initClassifier(): Boolean {
+        Log.d(LOG_TAG_CLASSIFY, "Classifier Initializing")
+
+        audioClassifier = AudioClassifier.createFromFile(this, "yamnet.tflite")
+        if(audioClassifier == null) return false
+
+        Log.d(LOG_TAG_CLASSIFY, "Classifier Initialized")
+        return true
+    }
+
+    private fun initDecoder(uri: Uri): Boolean {
+        Log.d(LOG_TAG_DECODE, "Decoder Initializing")
+
+        val trackIdx = getAudioTrack(uri)
+        if(trackIdx < 0) return false
+
+        Log.d(LOG_TAG_DECODE, "Track Found : [$trackIdx]")
+
         if(audioDecoder != null) {
             audioDecoder!!.stop()
             audioDecoder!!.release()
@@ -158,17 +168,17 @@ class MainActivity: AppCompatActivity() {
 
         audioDecoder!!.configure(audioFormat, null, null, 0)
         audioDecoder!!.start()
+
+        Log.d(LOG_TAG_DECODE, "Decoder Initialized")
         return true
     }
 
     private fun startDecoder() {
-        Log.d(LOG_TAG_DECODE, "Decoder Started")
-
-        startDecoderInput()
-        startDecoderOutput()
+        startDecoderInputProcessing()
+        startDecoderOutputProcessing()
     }
 
-    private fun startDecoderInput() {
+    private fun startDecoderInputProcessing() {
         CoroutineScope(Dispatchers.Default).launch {
             while(true) {
                 val inputIdx = audioDecoder!!.dequeueInputBuffer(0)
@@ -191,7 +201,7 @@ class MainActivity: AppCompatActivity() {
         }
     }
 
-    private fun startDecoderOutput() {
+    private fun startDecoderOutputProcessing() {
         CoroutineScope(Dispatchers.Default).launch {
             val audioChannelCount = audioFormat!!.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
             val audioFrameSize = audioChannelCount * 2
@@ -200,7 +210,7 @@ class MainActivity: AppCompatActivity() {
             Log.d(LOG_TAG_DECODE, "Decoder Spec: Channel Count - [$audioChannelCount] / Sample Rate - [$audioSampleRate]")
 
             val bufferInfo = MediaCodec.BufferInfo()
-            val bufferSampleCount = audioClassifier.requiredInputBufferSize.toInt()
+            val bufferSampleCount = audioClassifier!!.requiredInputBufferSize.toInt()
             val bufferSize = bufferSampleCount * audioChannelCount * 2
 
             val classifierBuffer = ByteBuffer.allocateDirect(bufferSize).order(ByteOrder.nativeOrder())
@@ -237,7 +247,7 @@ class MainActivity: AppCompatActivity() {
                             currentTimeUs = (decodedSampleCount * 1_000_000) / audioSampleRate
                         }
 
-                        for(i in 0 until audioChannelCount) {
+                        repeat(audioChannelCount) {
                             classifierBuffer.putShort(outputBuffer.short)
                         }
                     }
@@ -248,12 +258,9 @@ class MainActivity: AppCompatActivity() {
         }
     }
 
-    private fun startClassifying() {
-        Log.d(LOG_TAG_CLASSIFY, "Classify Started")
-
+    private fun startClassifier() {
         CoroutineScope(Dispatchers.Default).launch {
             val audioSampleRate = audioFormat!!.getInteger(MediaFormat.KEY_SAMPLE_RATE)
-
             while(true) {
                 val curData = pcmChannel!!.receiveCatching().getOrNull()
                 if(curData == null) break
@@ -261,11 +268,11 @@ class MainActivity: AppCompatActivity() {
                 val currentTimeUs = curData.first
                 val pcmData = curData.second
 
-                val tensorAudio = audioClassifier.createInputTensorAudio()
+                val tensorAudio = audioClassifier!!.createInputTensorAudio()
                 tensorAudio.load(pcmData)
 
-                val classifyResult = audioClassifier.classify(tensorAudio)
-                val speechCategory = classifyResult.firstOrNull()?.categories?.filter { filteredSoundLabels.contains(it.label.lowercase()) }
+                val classifyResult = audioClassifier!!.classify(tensorAudio)
+                val speechCategory = classifyResult.firstOrNull()?.categories?.filter { humanSoundLabels.contains(it.label.lowercase()) }
                 val segmentDurationUs = (pcmData.size.toLong() * 1_000_000) / audioSampleRate
                 speechCategory?.forEach {
                     if(it.score >= CLASSIFY_THRESHOLD) {
@@ -278,11 +285,11 @@ class MainActivity: AppCompatActivity() {
                 }
             }
 
-            mergeOverlapped()
+            onClassifyDone()
         }
     }
 
-    private suspend fun mergeOverlapped() {
+    private suspend fun onClassifyDone() {
         if(detectedRanges.isEmpty()) return
 
         val sortedRanges = detectedRanges.sortedBy { it.first }
