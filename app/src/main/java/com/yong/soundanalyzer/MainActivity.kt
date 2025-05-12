@@ -30,7 +30,7 @@ import kotlin.math.min
 class MainActivity: AppCompatActivity() {
     companion object {
         // YAMNet Classify 과정에서의 판단 기준 값
-        private const val CLASSIFY_THRESHOLD = 0.1f
+        private const val CLASSIFY_THRESHOLD = 0.5f
 
         private const val LOG_TAG_CLASSIFY = "SoundAnalyzer_Classify"
         private const val LOG_TAG_DECODE = "SoundAnalyzer_Decode"
@@ -127,7 +127,8 @@ class MainActivity: AppCompatActivity() {
         var isInitialized = initClassifier() && initDecoder(uri)
         if(!isInitialized) return
 
-        // 데이터 전달을 위한 Channel 초기화
+        // 데이터 전달을 위한 Channel 및 데이터 Array 초기화
+        detectedRanges.clear()
         pcmChannel = Channel<Pair<Long, ShortArray>>()
 
         // Classifier 및 Decoder 시작
@@ -268,7 +269,7 @@ class MainActivity: AppCompatActivity() {
             val shortBuffer = ShortArray(bufferSize)
 
             // 현재 SampleTime 계산을 위한 값
-            var currentTimeUs = 0L
+            var startSampleTimeUs = -1L
             var decodedSampleCount = 0L
 
             while(true) {
@@ -288,6 +289,11 @@ class MainActivity: AppCompatActivity() {
                     outputBuffer.position(bufferInfo.offset)
                     outputBuffer.limit(bufferInfo.offset + bufferInfo.size)
 
+                    val curSampleTime = bufferInfo.presentationTimeUs
+                    if(startSampleTimeUs == -1L && curSampleTime >= 0L) {
+                        startSampleTimeUs = curSampleTime
+                    }
+
                     // TODO: PCM Channel-Count & Sample-Rate 조정 필요
                     // YAMNet은 16kHz 1-ch 오디오를 처리하도록 되어있기에, 리샘플링이 필요함
                     // 일단 원본 PCM을 그대로 넣어도 정확도에 큰 문제가 발생하지는 않는 듯
@@ -299,13 +305,15 @@ class MainActivity: AppCompatActivity() {
                             classifierBuffer.flip()
                             classifierBuffer.asShortBuffer().get(shortBuffer, 0, classifierBuffer.limit() / 2)
 
+                            // Sample Time 계산
+                            val currentSampleTimeUs = startSampleTimeUs + (decodedSampleCount * 1_000_000L) / audioSampleRate
+
                             // Channel을 통해 전달
-                            pcmChannel!!.send(Pair(currentTimeUs, shortBuffer.copyOf(classifierBuffer.limit() / 2)))
+                            pcmChannel!!.send(Pair(currentSampleTimeUs, shortBuffer.copyOf(classifierBuffer.limit() / 2)))
                             classifierBuffer.clear()
 
                             // 처리한 Sample 데이터 수를 기반으로 Sample Time 업데이트
                             decodedSampleCount += bufferSampleCount
-                            currentTimeUs = (decodedSampleCount * 1_000_000) / audioSampleRate
                         }
 
                         // Channel 수만큼 PCM 데이터 연속 전달
@@ -330,7 +338,6 @@ class MainActivity: AppCompatActivity() {
             val audioSampleRate = audioFormat!!.getInteger(MediaFormat.KEY_SAMPLE_RATE)
             
             while(true) {
-                Log.d(LOG_TAG_CLASSIFY, "Classifier Waiting for data")
                 // Channel로부터 처리할 데이터 확인
                 val curData = pcmChannel!!.receiveCatching().getOrNull()
                 // Channel이 유효하지 않은 경우
@@ -340,7 +347,6 @@ class MainActivity: AppCompatActivity() {
                 // 현재 데이터의 Sample Time 및 PCM 데이터
                 val currentTimeUs = curData.first
                 val pcmData = curData.second
-                Log.d(LOG_TAG_CLASSIFY, "Classifier got data: $currentTimeUs / (${pcmData.size})${pcmData.toList().subList(0, 10)}...")
 
                 // Classifier 속성으로 Tensor Audio 인스턴스 생성
                 val tensorAudio = audioClassifier!!.createInputTensorAudio()
@@ -353,7 +359,7 @@ class MainActivity: AppCompatActivity() {
                     // 정해진 Label에 대해서 Category 필터링
                     ?.filter { humanSoundLabels.contains(it.label.lowercase()) }
                     // 정확도가 Threshold 값보다 높은 경우 필터링
-                    ?.filter { it.score >= CLASSIFY_THRESHOLD }
+                    ?.filter { it.score > CLASSIFY_THRESHOLD }
 
                 // SampleRate를 기반으로 현재 PCM 데이터의 Duration 확인
                 val segmentDurationUs = (pcmData.size.toLong() * 1_000_000) / audioSampleRate
@@ -367,7 +373,7 @@ class MainActivity: AppCompatActivity() {
                 }
             }
 
-            Log.d(LOG_TAG_CLASSIFY, "Classifier Done")
+            Log.d(LOG_TAG_CLASSIFY, "Classifier Done: [${detectedRanges.size}]")
             // Classify 결과 후처리
             onClassifyDone()
         }
@@ -390,23 +396,29 @@ class MainActivity: AppCompatActivity() {
                 currentRange = Pair(min(currentRange.first, nextRange.first), max(currentRange.second, nextRange.second))
             } else {
                 // 하나의 TimeRange가 완성되었다면 UI에 추가
-                Log.d(LOG_TAG_CLASSIFY, "Classify Merged: ${currentRange.first}ms ~ ${currentRange.second}ms")
-                
-                withContext(Dispatchers.Main) {
-                    layoutResult.addView(
-                        TextView(this@MainActivity).apply {
-                            text = String.format(Locale.getDefault(), "%.2fs - %.2fs", currentRange.first / 1000.0, currentRange.second / 1000.0)
-                            layoutParams = LinearLayout.LayoutParams(
-                                ViewGroup.LayoutParams.WRAP_CONTENT,
-                                ViewGroup.LayoutParams.WRAP_CONTENT
-                            )
-                        }
-                    )
-                }
+                addMergedRangeToUI(currentRange)
+
                 currentRange = nextRange
             }
         }
 
+        // 마지막 Range를 UI에 추가
+        addMergedRangeToUI(currentRange)
+
         Log.d(LOG_TAG_CLASSIFY, "Classify Merge Done")
+    }
+
+    private suspend fun addMergedRangeToUI(range: Pair<Long, Long>) {
+        withContext(Dispatchers.Main) {
+            layoutResult.addView(
+                TextView(this@MainActivity).apply {
+                    text = String.format(Locale.getDefault(), "%.2fs - %.2fs", range.first / 1000.0, range.second / 1000.0)
+                    layoutParams = LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT
+                    )
+                }
+            )
+        }
     }
 }
