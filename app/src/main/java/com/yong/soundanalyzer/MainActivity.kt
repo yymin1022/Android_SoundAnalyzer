@@ -214,6 +214,8 @@ class MainActivity: AppCompatActivity() {
     // Decoder Input 처리 시작
     private fun startDecoderInputProcessing() {
         CoroutineScope(Dispatchers.Default).launch {
+            Log.d(LOG_TAG_CLASSIFY, "Decoder Input Starting")
+
             while(true) {
                 // Input Buffer 확인
                 val inputIdx = audioDecoder!!.dequeueInputBuffer(0)
@@ -247,6 +249,8 @@ class MainActivity: AppCompatActivity() {
     // Decoder Output 처리 시작
     private fun startDecoderOutputProcessing() {
         CoroutineScope(Dispatchers.Default).launch {
+            Log.d(LOG_TAG_CLASSIFY, "Decoder Output Starting")
+
             // Buffer 크기 계산을 위해 Audio 속성 확인
             val audioChannelCount = audioFormat!!.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
             val audioFrameSize = audioChannelCount * 2
@@ -320,10 +324,13 @@ class MainActivity: AppCompatActivity() {
     // Classifier 처리 시작
     private fun startClassifier() {
         CoroutineScope(Dispatchers.Default).launch {
+            Log.d(LOG_TAG_CLASSIFY, "Classifier Starting")
+
             // Audio SampleRate 속성 확인
             val audioSampleRate = audioFormat!!.getInteger(MediaFormat.KEY_SAMPLE_RATE)
             
             while(true) {
+                Log.d(LOG_TAG_CLASSIFY, "Classifier Waiting for data")
                 // Channel로부터 처리할 데이터 확인
                 val curData = pcmChannel!!.receiveCatching().getOrNull()
                 // Channel이 유효하지 않은 경우
@@ -333,6 +340,7 @@ class MainActivity: AppCompatActivity() {
                 // 현재 데이터의 Sample Time 및 PCM 데이터
                 val currentTimeUs = curData.first
                 val pcmData = curData.second
+                Log.d(LOG_TAG_CLASSIFY, "Classifier got data: $currentTimeUs / (${pcmData.size})${pcmData.toList().subList(0, 10)}...")
 
                 // Classifier 속성으로 Tensor Audio 인스턴스 생성
                 val tensorAudio = audioClassifier!!.createInputTensorAudio()
@@ -359,6 +367,7 @@ class MainActivity: AppCompatActivity() {
                 }
             }
 
+            Log.d(LOG_TAG_CLASSIFY, "Classifier Done")
             // Classify 결과 후처리
             onClassifyDone()
         }
@@ -368,6 +377,8 @@ class MainActivity: AppCompatActivity() {
     private suspend fun onClassifyDone() {
         // 처리된 결과가 비어있는 경우 종료
         if(detectedRanges.isEmpty()) return
+
+        Log.d(LOG_TAG_CLASSIFY, "Classify Merge Starting")
 
         // 처리된 결과를 TimeRange 기준으로 정렬
         val sortedRanges = detectedRanges.sortedBy { it.first }
@@ -396,6 +407,6 @@ class MainActivity: AppCompatActivity() {
             }
         }
 
-        Log.d(LOG_TAG_CLASSIFY, "Classify Done")
+        Log.d(LOG_TAG_CLASSIFY, "Classify Merge Done")
     }
 }
