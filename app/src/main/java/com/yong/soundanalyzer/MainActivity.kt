@@ -91,8 +91,8 @@ class MainActivity: AppCompatActivity() {
     private fun initEventListener() {
         btnSelect.setOnClickListener {
             Log.d(LOG_TAG_SELECT, "Select Started")
-            val mimeType = setOf(MIMETYPE_AUDIO, MIMETYPE_VIDEO)
-            selectAudioFile.launch(mimeType.joinToString(","))
+            val mimeType = arrayOf(MIMETYPE_AUDIO, MIMETYPE_VIDEO)
+            selectMediaFile.launch(mimeType)
         }
     }
 
@@ -102,9 +102,9 @@ class MainActivity: AppCompatActivity() {
         tvAudioPath.text = filepath
     }
 
-    // Audio File 선택 이후 결과 처리
-    private val selectAudioFile = registerForActivityResult(
-        ActivityResultContracts.GetContent()
+    // Media File 선택 이후 결과 처리
+    private val selectMediaFile = registerForActivityResult(
+        ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
         uri?.let {
             Log.d(LOG_TAG_SELECT, "Select Done: $it")
