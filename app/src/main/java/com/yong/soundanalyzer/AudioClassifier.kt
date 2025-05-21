@@ -20,6 +20,7 @@ class AudioClassifier {
         private const val LOG_TAG_CLASSIFY = "SoundAnalyzer_Classify"
 
         private const val TF_YAMNET_MODEL_FILENAME = "yamnet.tflite"
+        private const val TF_YAMNET_QC_MODEL_FILENAME = "yamnet_qc.tflite"
     }
 
     interface Delegate {
