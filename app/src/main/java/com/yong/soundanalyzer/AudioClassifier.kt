@@ -103,7 +103,7 @@ class AudioClassifier {
                     val endTimeMs = (currentTimeUs + segmentDurationUs) / 1000
                     detectedRanges.add(Pair(startTimeMs, endTimeMs))
 
-                    Log.d(LOG_TAG_CLASSIFY, "Classified [${it.displayName}(${it.label})]: ${startTimeMs}ms ~ ${endTimeMs}ms / Score: ${it.score}")
+                    Log.d(LOG_TAG_CLASSIFY, "Classified [${it.label}]: ${startTimeMs}ms ~ ${endTimeMs}ms / Score: ${it.score}")
                 }
             }
 
