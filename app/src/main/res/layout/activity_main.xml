@@ -22,10 +22,40 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="Select an audio file"
-        app:layout_constraintBottom_toTopOf="@id/main_baseline_height_center"
+        app:layout_constraintBottom_toTopOf="@id/main_btn_start"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/main_btn_select" />
+
+    <Button
+        android:id="@+id/main_btn_start_gpu"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Start GPU"
+        app:layout_constraintBottom_toTopOf="@id/main_tv_time_duration"
+        app:layout_constraintEnd_toStartOf="@id/main_btn_start"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/main_tv_audio_path" />
+
+    <Button
+        android:id="@+id/main_btn_start"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Start"
+        app:layout_constraintBottom_toTopOf="@id/main_tv_time_duration"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/main_tv_audio_path" />
+
+    <Button
+        android:id="@+id/main_btn_start_nnapi"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Start NNAPI"
+        app:layout_constraintBottom_toTopOf="@id/main_tv_time_duration"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toEndOf="@id/main_btn_start"
+        app:layout_constraintTop_toBottomOf="@id/main_tv_audio_path" />
 
     <TextView
         android:id="@+id/main_tv_time_duration"
@@ -35,7 +65,7 @@
         app:layout_constraintBottom_toTopOf="@id/main_baseline_height_center"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/main_tv_audio_path" />
+        app:layout_constraintTop_toBottomOf="@id/main_btn_start" />
 
     <com.google.android.material.internal.BaselineLayout
         android:id="@+id/main_baseline_height_center"

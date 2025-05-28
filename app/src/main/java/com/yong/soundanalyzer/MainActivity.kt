@@ -26,6 +26,9 @@ class MainActivity: AppCompatActivity() {
 
     // UI Elements
     private lateinit var btnSelect: Button
+    private lateinit var btnStart: Button
+    private lateinit var btnStartGPU: Button
+    private lateinit var btnStartNNAPI: Button
     private lateinit var layoutResult: LinearLayout
     private lateinit var tvAudioPath: TextView
     private lateinit var tvTimeDuration: TextView
@@ -35,6 +38,9 @@ class MainActivity: AppCompatActivity() {
 
     // Audio Decoder 인스턴스
     private var audioDecoder: AudioDecoder? = null
+    
+    // 선택한 Audio File URI
+    private var audioFileUri: Uri? = null
 
     // Decoding 결과 데이터를 처리하기 위한 Channel 및 List
     private var pcmChannel: Channel<PcmData>? = null
@@ -60,6 +66,9 @@ class MainActivity: AppCompatActivity() {
     // UI View Initialization
     private fun initUI() {
         btnSelect = findViewById(R.id.main_btn_select)
+        btnStart = findViewById(R.id.main_btn_start)
+        btnStartGPU = findViewById(R.id.main_btn_start_gpu)
+        btnStartNNAPI = findViewById(R.id.main_btn_start_nnapi)
         layoutResult = findViewById(R.id.main_layout_result)
         tvAudioPath = findViewById(R.id.main_tv_audio_path)
         tvTimeDuration = findViewById(R.id.main_tv_time_duration)
@@ -72,6 +81,11 @@ class MainActivity: AppCompatActivity() {
             val mimeType = arrayOf(MIMETYPE_AUDIO, MIMETYPE_VIDEO)
             selectMediaFile.launch(mimeType)
         }
+
+        // Audio 처리 과정 시작
+        btnStart.setOnClickListener { startAudioProcessing(AudioClassifier.TF_MODE_NORMAL) }
+        btnStartGPU.setOnClickListener { startAudioProcessing(AudioClassifier.TF_MODE_GPU) }
+        btnStartNNAPI.setOnClickListener { startAudioProcessing(AudioClassifier.TF_MODE_NNAPI) }
     }
 
     // Media File 선택 이후 결과 처리
@@ -80,30 +94,33 @@ class MainActivity: AppCompatActivity() {
     ) { uri: Uri? ->
         uri?.let {
             Log.d(LOG_TAG_SELECT, "Select Done: $it")
-
-            // Audio 처리 과정 시작
-            startAudioProcessing(it)
+            // UI Update
+            tvAudioPath.text = uri.path
+            // 선택 상태 업데이트
+            audioFileUri = uri
         }
     }
 
     // Audio 처리 과정 시작
-    private fun startAudioProcessing(uri: Uri) {
-        Log.d(LOG_TAG_PROCESS, "Process Started: $uri")
+    private fun startAudioProcessing(mode: String) {
+        if(audioFileUri == null) return
+        layoutResult.removeAllViewsInLayout()
+        setButtonsEnabled(false)
+        tvTimeDuration.text = ""
+
+        Log.d(LOG_TAG_PROCESS, "Process Started: $audioFileUri")
         timeStart = System.currentTimeMillis()
 
         // 전체 Flow는 다음과 같음
         // Decoding -> [PCM Data] -> Classify w/ Tensorflow Lite YAMNet -> [Result Data]
 
         // Classifier 및 Decoder 초기화
-        var isInitialized = initClassifier() && initDecoder(uri)
+        var isInitialized = initClassifier(mode) && initDecoder(audioFileUri!!)
         if(!isInitialized) return
 
         // 데이터 전달을 위한 Channel 초기화
         pcmChannel = Channel<PcmData>()
         if(pcmChannel == null) return
-
-        // UI Update
-        updateUI(uri.path ?: "Unknown Path")
 
         // Classifier 및 Decoder 시작
         audioClassifier!!.startClassifier(pcmChannel!!)
@@ -117,26 +134,25 @@ class MainActivity: AppCompatActivity() {
     }
 
     // Classifier 초기화
-    private fun initClassifier(): Boolean {
+    private fun initClassifier(mode: String): Boolean {
         val delegate = object: AudioClassifier.Delegate {
             override fun addToUI(range: Pair<Long, Long>) {
                 addMergedRangeToUI(range)
             }
 
             override fun onError() {
-                btnSelect.isEnabled = true
+                setButtonsEnabled(true)
                 tvTimeDuration.text = "Error"
             }
 
             override fun onFinish() {
                 val timeFinish = System.currentTimeMillis()
                 tvTimeDuration.text = getDurationString(timeStart, timeFinish)
-
-                btnSelect.isEnabled = true
+                setButtonsEnabled(true)
             }
         }
         audioClassifier = AudioClassifier()
-        return audioClassifier?.init(applicationContext, delegate) ?: false
+        return audioClassifier?.init(applicationContext, mode, delegate) ?: false
     }
 
     private fun addMergedRangeToUI(range: Pair<Long, Long>) {
@@ -160,11 +176,11 @@ class MainActivity: AppCompatActivity() {
         return String.format(Locale.getDefault(), "%02d.%03ds", sec, milli)
     }
 
-    // UI Update
-    private fun updateUI(filepath: String) {
-        layoutResult.removeAllViewsInLayout()
-        btnSelect.isEnabled = false
-        tvAudioPath.text = filepath
-        tvTimeDuration.text = "Classify Running..."
+    // Button Enable / Disable
+    private fun setButtonsEnabled(flag: Boolean) {
+        btnSelect.isEnabled = flag
+        btnStart.isEnabled = flag
+        btnStartGPU.isEnabled = flag
+        btnStartNNAPI.isEnabled = flag
     }
 }
