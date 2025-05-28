@@ -8,6 +8,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.tensorflow.lite.task.audio.classifier.AudioClassifier
+import org.tensorflow.lite.task.core.BaseOptions
 import java.io.IOException
 import kotlin.math.max
 import kotlin.math.min
@@ -22,7 +23,10 @@ class AudioClassifier {
         private const val LOG_TAG_CLASSIFY = "SoundAnalyzer_Classify"
 
         private const val TF_YAMNET_MODEL_FILENAME = "yamnet.tflite"
-        private const val TF_YAMNET_QC_MODEL_FILENAME = "yamnet_qc.tflite"
+
+        const val TF_MODE_GPU = "MODE_GPU"
+        const val TF_MODE_NNAPI = "MODE_NNAPI"
+        const val TF_MODE_NORMAL = "MODE_NORMAL"
     }
 
     interface Delegate {
@@ -46,20 +50,31 @@ class AudioClassifier {
     // Classifier 초기화
     fun init(
         context: Context,
+        mode: String,
         delegate: Delegate? = null
     ): Boolean {
-        Log.d(LOG_TAG_CLASSIFY, "Classifier Initializing")
+        Log.d(LOG_TAG_CLASSIFY, "Classifier Initializing (Mode $mode)")
         this.delegate = delegate
 
         // Model File을 통해 YAMNet Classifier 생성
         try {
-            tfAudioClassifier = AudioClassifier.createFromFile(context, TF_YAMNET_MODEL_FILENAME)
+            // Tensorflow 기본 Option 구성 (GPU / NNAPI Delegate 설정을 위함)
+            val baseOption = BaseOptions.builder()
+            // GPU 또는 NNAPI Mode인 경우 활성화
+            if(mode == TF_MODE_GPU) baseOption.useGpu()
+            if(mode == TF_MODE_NNAPI) baseOption.useNnapi()
+
+            // Classifier Option 구성
+            val classifierOption = AudioClassifier.AudioClassifierOptions.builder()
+                .setBaseOptions(baseOption.build())
+                .build()
+
+            tfAudioClassifier = AudioClassifier.createFromFileAndOptions(context, TF_YAMNET_MODEL_FILENAME, classifierOption)
             if(tfAudioClassifier == null) return false
         } catch(e: IOException) {
             Log.e(LOG_TAG_CLASSIFY, "Classifier Initialize Error: [${e.toString()}]")
             return false
         }
-
 
         Log.d(LOG_TAG_CLASSIFY, "Classifier Initialized")
         return true
