@@ -6,7 +6,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.tensorflow.lite.task.audio.classifier.AudioClassifier
+import java.io.IOException
 import kotlin.math.max
 import kotlin.math.min
 
@@ -24,7 +26,9 @@ class AudioClassifier {
     }
 
     interface Delegate {
-        suspend fun onRangeComposed(range: Pair<Long, Long>)
+        fun addToUI(range: Pair<Long, Long>)
+        fun onError()
+        fun onFinish()
     }
 
     // YAMNet Model에서 필터링하기 위한 Sound Label
@@ -48,8 +52,14 @@ class AudioClassifier {
         this.delegate = delegate
 
         // Model File을 통해 YAMNet Classifier 생성
-        tfAudioClassifier = AudioClassifier.createFromFile(context, TF_YAMNET_MODEL_FILENAME)
-        if(tfAudioClassifier == null) return false
+        try {
+            tfAudioClassifier = AudioClassifier.createFromFile(context, TF_YAMNET_MODEL_FILENAME)
+            if(tfAudioClassifier == null) return false
+        } catch(e: IOException) {
+            Log.e(LOG_TAG_CLASSIFY, "Classifier Initialize Error: [${e.toString()}]")
+            return false
+        }
+
 
         Log.d(LOG_TAG_CLASSIFY, "Classifier Initialized")
         return true
@@ -101,6 +111,8 @@ class AudioClassifier {
             Log.d(LOG_TAG_CLASSIFY, "Classifier Done: [${detectedRanges.size}]")
             // Classify 결과 후처리
             mergeClassifyResults(detectedRanges)
+
+            withContext(Dispatchers.Main) { delegate?.onFinish() }
         }
     }
 
@@ -119,13 +131,12 @@ class AudioClassifier {
                 currentRange = Pair(min(currentRange.first, nextRange.first), max(currentRange.second, nextRange.second))
             } else {
                 // 하나의 TimeRange가 완성되었다면 UI에 추가
-                delegate?.onRangeComposed(currentRange)
-
+                withContext(Dispatchers.Main) { delegate?.addToUI(currentRange) }
                 currentRange = nextRange
             }
         }
 
         // 마지막 Range를 UI에 추가
-        delegate?.onRangeComposed(currentRange)
+        withContext(Dispatchers.Main) { delegate?.addToUI(currentRange) }
     }
 }

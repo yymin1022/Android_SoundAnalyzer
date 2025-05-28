@@ -12,9 +12,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.withContext
 import java.util.Locale
 
 class MainActivity: AppCompatActivity() {
@@ -76,14 +74,6 @@ class MainActivity: AppCompatActivity() {
         }
     }
 
-    // UI Update
-    private fun updateUI(filepath: String) {
-        layoutResult.removeAllViewsInLayout()
-        btnSelect.isEnabled = false
-        tvAudioPath.text = filepath
-        tvTimeDuration.text = "Classify Running..."
-    }
-
     // Media File 선택 이후 결과 처리
     private val selectMediaFile = registerForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -91,8 +81,6 @@ class MainActivity: AppCompatActivity() {
         uri?.let {
             Log.d(LOG_TAG_SELECT, "Select Done: $it")
 
-            // UI Update
-            updateUI(it.path ?: "Unknown Path")
             // Audio 처리 과정 시작
             startAudioProcessing(it)
         }
@@ -114,6 +102,9 @@ class MainActivity: AppCompatActivity() {
         pcmChannel = Channel<PcmData>()
         if(pcmChannel == null) return
 
+        // UI Update
+        updateUI(uri.path ?: "Unknown Path")
+
         // Classifier 및 Decoder 시작
         audioClassifier!!.startClassifier(pcmChannel!!)
         audioDecoder!!.startDecoder(pcmChannel!!)
@@ -128,22 +119,24 @@ class MainActivity: AppCompatActivity() {
     // Classifier 초기화
     private fun initClassifier(): Boolean {
         val delegate = object: AudioClassifier.Delegate {
-            override suspend fun onRangeComposed(range: Pair<Long, Long>) = onFinish(range)
+            override fun addToUI(range: Pair<Long, Long>) {
+                addMergedRangeToUI(range)
+            }
+
+            override fun onError() {
+                btnSelect.isEnabled = true
+                tvTimeDuration.text = "Error"
+            }
+
+            override fun onFinish() {
+                val timeFinish = System.currentTimeMillis()
+                tvTimeDuration.text = getDurationString(timeStart, timeFinish)
+
+                btnSelect.isEnabled = true
+            }
         }
         audioClassifier = AudioClassifier()
         return audioClassifier?.init(applicationContext, delegate) ?: false
-    }
-
-    private suspend fun onFinish(range: Pair<Long, Long>) {
-        withContext(Dispatchers.Main) {
-            btnSelect.isEnabled = true
-
-            val timeFinish = System.currentTimeMillis()
-            tvTimeDuration.text = getDurationString(timeStart, timeFinish)
-
-            addMergedRangeToUI(range)
-        }
-
     }
 
     private fun addMergedRangeToUI(range: Pair<Long, Long>) {
@@ -162,8 +155,16 @@ class MainActivity: AppCompatActivity() {
         val timeDuration = to - from
 
         val milli = timeDuration % 1000
-        val sec = timeDuration / 1000 % 60
+        val sec = timeDuration / 1000
 
         return String.format(Locale.getDefault(), "%02d.%03ds", sec, milli)
+    }
+
+    // UI Update
+    private fun updateUI(filepath: String) {
+        layoutResult.removeAllViewsInLayout()
+        btnSelect.isEnabled = false
+        tvAudioPath.text = filepath
+        tvTimeDuration.text = "Classify Running..."
     }
 }
