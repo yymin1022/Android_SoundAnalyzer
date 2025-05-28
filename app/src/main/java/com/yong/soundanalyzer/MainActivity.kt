@@ -30,6 +30,7 @@ class MainActivity: AppCompatActivity() {
     private lateinit var btnSelect: Button
     private lateinit var layoutResult: LinearLayout
     private lateinit var tvAudioPath: TextView
+    private lateinit var tvTimeDuration: TextView
 
     // Tensorflow Lite Classifier 인스턴스
     private var audioClassifier: AudioClassifier? = null
@@ -39,6 +40,9 @@ class MainActivity: AppCompatActivity() {
 
     // Decoding 결과 데이터를 처리하기 위한 Channel 및 List
     private var pcmChannel: Channel<PcmData>? = null
+
+    // 소요시간 측정을 위한 Start Time
+    private var timeStart: Long = 0L
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -60,6 +64,7 @@ class MainActivity: AppCompatActivity() {
         btnSelect = findViewById(R.id.main_btn_select)
         layoutResult = findViewById(R.id.main_layout_result)
         tvAudioPath = findViewById(R.id.main_tv_audio_path)
+        tvTimeDuration = findViewById(R.id.main_tv_time_duration)
     }
 
     // UI Event Listener Initialization
@@ -74,7 +79,9 @@ class MainActivity: AppCompatActivity() {
     // UI Update
     private fun updateUI(filepath: String) {
         layoutResult.removeAllViewsInLayout()
+        btnSelect.isEnabled = false
         tvAudioPath.text = filepath
+        tvTimeDuration.text = "Classify Running..."
     }
 
     // Media File 선택 이후 결과 처리
@@ -94,6 +101,7 @@ class MainActivity: AppCompatActivity() {
     // Audio 처리 과정 시작
     private fun startAudioProcessing(uri: Uri) {
         Log.d(LOG_TAG_PROCESS, "Process Started: $uri")
+        timeStart = System.currentTimeMillis()
 
         // 전체 Flow는 다음과 같음
         // Decoding -> [PCM Data] -> Classify w/ Tensorflow Lite YAMNet -> [Result Data]
@@ -120,24 +128,42 @@ class MainActivity: AppCompatActivity() {
     // Classifier 초기화
     private fun initClassifier(): Boolean {
         val delegate = object: AudioClassifier.Delegate {
-            override suspend fun onRangeComposed(range: Pair<Long, Long>)
-                = addMergedRangeToUI(range)
+            override suspend fun onRangeComposed(range: Pair<Long, Long>) = onFinish(range)
         }
         audioClassifier = AudioClassifier()
         return audioClassifier?.init(applicationContext, delegate) ?: false
     }
 
-    private suspend fun addMergedRangeToUI(range: Pair<Long, Long>) {
+    private suspend fun onFinish(range: Pair<Long, Long>) {
         withContext(Dispatchers.Main) {
-            layoutResult.addView(
-                TextView(this@MainActivity).apply {
-                    text = String.format(Locale.getDefault(), "%.2fs - %.2fs", range.first / 1000.0, range.second / 1000.0)
-                    layoutParams = LinearLayout.LayoutParams(
-                        ViewGroup.LayoutParams.WRAP_CONTENT,
-                        ViewGroup.LayoutParams.WRAP_CONTENT
-                    )
-                }
-            )
+            btnSelect.isEnabled = true
+
+            val timeFinish = System.currentTimeMillis()
+            tvTimeDuration.text = getDurationString(timeStart, timeFinish)
+
+            addMergedRangeToUI(range)
         }
+
+    }
+
+    private fun addMergedRangeToUI(range: Pair<Long, Long>) {
+        layoutResult.addView(
+            TextView(this@MainActivity).apply {
+                text = String.format(Locale.getDefault(), "%.2fs - %.2fs", range.first / 1000.0, range.second / 1000.0)
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                )
+            }
+        )
+    }
+
+    private fun getDurationString(from: Long, to: Long): String {
+        val timeDuration = to - from
+
+        val milli = timeDuration % 1000
+        val sec = timeDuration / 1000 % 60
+
+        return String.format(Locale.getDefault(), "%02d.%03ds", sec, milli)
     }
 }
