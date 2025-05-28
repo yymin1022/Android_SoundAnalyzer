@@ -2,14 +2,18 @@ package com.yong.soundanalyzer
 
 import android.content.Context
 import android.util.Log
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.tensorflow.lite.task.audio.classifier.AudioClassifier
 import org.tensorflow.lite.task.core.BaseOptions
 import java.io.IOException
+import java.util.concurrent.Executors
 import kotlin.math.max
 import kotlin.math.min
 
@@ -45,6 +49,10 @@ class AudioClassifier {
     private var tfAudioClassifier: AudioClassifier? = null
     private val detectedRanges = mutableListOf<Pair<Long, Long>>()
 
+    // Classifier 동작을 위한 Scope
+    private var tfDispatcher: CoroutineDispatcher = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
+    private var isReady = false
+
     private var delegate: Delegate? = null
 
     // Classifier 초기화
@@ -56,24 +64,27 @@ class AudioClassifier {
         Log.d(LOG_TAG_CLASSIFY, "Classifier Initializing (Mode $mode)")
         this.delegate = delegate
 
-        // Model File을 통해 YAMNet Classifier 생성
-        try {
-            // Tensorflow 기본 Option 구성 (GPU / NNAPI Delegate 설정을 위함)
-            val baseOption = BaseOptions.builder()
-            // GPU 또는 NNAPI Mode인 경우 활성화
-            if(mode == TF_MODE_GPU) baseOption.useGpu()
-            if(mode == TF_MODE_NNAPI) baseOption.useNnapi()
+        CoroutineScope(tfDispatcher).launch {
+            // Model File을 통해 YAMNet Classifier 생성
+            try {
+                // Tensorflow 기본 Option 구성 (GPU / NNAPI Delegate 설정을 위함)
+                val baseOption = BaseOptions.builder()
+                // GPU 또는 NNAPI Mode인 경우 활성화
+                if(mode == TF_MODE_GPU) baseOption.useGpu()
+                if(mode == TF_MODE_NNAPI) baseOption.useNnapi()
 
-            // Classifier Option 구성
-            val classifierOption = AudioClassifier.AudioClassifierOptions.builder()
-                .setBaseOptions(baseOption.build())
-                .build()
+                // Classifier Option 구성
+                val classifierOption = AudioClassifier.AudioClassifierOptions.builder()
+                    .setBaseOptions(baseOption.build())
+                    .build()
 
-            tfAudioClassifier = AudioClassifier.createFromFileAndOptions(context, TF_YAMNET_MODEL_FILENAME, classifierOption)
-            if(tfAudioClassifier == null) return false
-        } catch(e: IOException) {
-            Log.e(LOG_TAG_CLASSIFY, "Classifier Initialize Error: [${e.toString()}]")
-            return false
+                tfAudioClassifier = AudioClassifier.createFromFileAndOptions(context, TF_YAMNET_MODEL_FILENAME, classifierOption)
+                if(tfAudioClassifier == null) return@launch
+
+                isReady = true
+            } catch(e: IOException) {
+                Log.e(LOG_TAG_CLASSIFY, "Classifier Initialize Error: [${e.toString()}]")
+            }
         }
 
         Log.d(LOG_TAG_CLASSIFY, "Classifier Initialized")
@@ -84,8 +95,9 @@ class AudioClassifier {
     fun startClassifier(
         pcmChannel: Channel<PcmData>
     ) {
-        CoroutineScope(Dispatchers.Default).launch {
+        CoroutineScope(tfDispatcher).launch {
             Log.d(LOG_TAG_CLASSIFY, "Classifier Starting")
+            while(!isReady) delay(50)
 
             while(true) {
                 // Channel로부터 처리할 데이터 확인
