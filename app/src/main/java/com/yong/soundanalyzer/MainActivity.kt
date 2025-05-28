@@ -28,8 +28,6 @@ class MainActivity: AppCompatActivity() {
 
     // UI Elements
     private lateinit var btnSelect: Button
-    private lateinit var btnStartNormal: Button
-    private lateinit var btnStartQualcomm: Button
     private lateinit var layoutResult: LinearLayout
     private lateinit var tvAudioPath: TextView
 
@@ -41,9 +39,6 @@ class MainActivity: AppCompatActivity() {
 
     // Decoding 결과 데이터를 처리하기 위한 Channel 및 List
     private var pcmChannel: Channel<PcmData>? = null
-
-    // 선택된 File 결과를 담기 위한 Uri
-    private var fileUri: Uri? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -63,8 +58,6 @@ class MainActivity: AppCompatActivity() {
     // UI View Initialization
     private fun initUI() {
         btnSelect = findViewById(R.id.main_btn_select)
-        btnStartNormal = findViewById(R.id.main_btn_start_normal)
-        btnStartQualcomm = findViewById(R.id.main_btn_start_qualcomm)
         layoutResult = findViewById(R.id.main_layout_result)
         tvAudioPath = findViewById(R.id.main_tv_audio_path)
     }
@@ -76,9 +69,6 @@ class MainActivity: AppCompatActivity() {
             val mimeType = arrayOf(MIMETYPE_AUDIO, MIMETYPE_VIDEO)
             selectMediaFile.launch(mimeType)
         }
-
-        btnStartNormal.setOnClickListener { startAudioProcessing(AudioClassifier.YAMNET_MODE_NORMAL) }
-        btnStartQualcomm.setOnClickListener { startAudioProcessing(AudioClassifier.YAMNET_MODE_QUALCOMM) }
     }
 
     // UI Update
@@ -96,21 +86,20 @@ class MainActivity: AppCompatActivity() {
 
             // UI Update
             updateUI(it.path ?: "Unknown Path")
-            // 선택된 File 업데이트
-            fileUri = uri
+            // Audio 처리 과정 시작
+            startAudioProcessing(it)
         }
     }
 
     // Audio 처리 과정 시작
-    private fun startAudioProcessing(mode: String) {
-        if(fileUri == null) return
-        Log.d(LOG_TAG_PROCESS, "Process Started: $fileUri")
+    private fun startAudioProcessing(uri: Uri) {
+        Log.d(LOG_TAG_PROCESS, "Process Started: $uri")
 
         // 전체 Flow는 다음과 같음
         // Decoding -> [PCM Data] -> Classify w/ Tensorflow Lite YAMNet -> [Result Data]
 
         // Classifier 및 Decoder 초기화
-        var isInitialized = initClassifier(mode) && initDecoder(fileUri!!)
+        var isInitialized = initClassifier() && initDecoder(uri)
         if(!isInitialized) return
 
         // 데이터 전달을 위한 Channel 초기화
@@ -129,13 +118,13 @@ class MainActivity: AppCompatActivity() {
     }
 
     // Classifier 초기화
-    private fun initClassifier(mode: String): Boolean {
+    private fun initClassifier(): Boolean {
         val delegate = object: AudioClassifier.Delegate {
             override suspend fun onRangeComposed(range: Pair<Long, Long>)
                 = addMergedRangeToUI(range)
         }
         audioClassifier = AudioClassifier()
-        return audioClassifier?.init(applicationContext, mode, delegate) ?: false
+        return audioClassifier?.init(applicationContext, delegate) ?: false
     }
 
     private suspend fun addMergedRangeToUI(range: Pair<Long, Long>) {

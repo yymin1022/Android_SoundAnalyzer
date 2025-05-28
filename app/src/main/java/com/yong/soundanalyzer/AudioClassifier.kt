@@ -12,10 +12,6 @@ import kotlin.math.min
 
 class AudioClassifier {
     companion object {
-        // YAMNet Mode
-        const val YAMNET_MODE_NORMAL = "YAMNET_MODE_NORMAL"
-        const val YAMNET_MODE_QUALCOMM = "YAMNET_MODE_QUALCOMM"
-
         // YAMNet Classify가 요구하는 Audio Sample Rate
         private const val CLASSIFY_SAMPLE_RATE = 16000
         // YAMNet Classify 과정에서의 판단 기준 값
@@ -23,7 +19,6 @@ class AudioClassifier {
 
         private const val LOG_TAG_CLASSIFY = "SoundAnalyzer_Classify"
 
-        // YAMNet Model File
         private const val TF_YAMNET_MODEL_FILENAME = "yamnet.tflite"
         private const val TF_YAMNET_QC_MODEL_FILENAME = "yamnet_qc.tflite"
     }
@@ -47,17 +42,13 @@ class AudioClassifier {
     // Classifier 초기화
     fun init(
         context: Context,
-        mode: String,
         delegate: Delegate? = null
     ): Boolean {
         Log.d(LOG_TAG_CLASSIFY, "Classifier Initializing")
         this.delegate = delegate
 
-        val yamnetModel = if(mode == YAMNET_MODE_QUALCOMM) TF_YAMNET_QC_MODEL_FILENAME
-                                else TF_YAMNET_MODEL_FILENAME
-
         // Model File을 통해 YAMNet Classifier 생성
-        tfAudioClassifier = AudioClassifier.createFromFile(context, yamnetModel)
+        tfAudioClassifier = AudioClassifier.createFromFile(context, TF_YAMNET_MODEL_FILENAME)
         if(tfAudioClassifier == null) return false
 
         Log.d(LOG_TAG_CLASSIFY, "Classifier Initialized")
