@@ -37,6 +37,7 @@ android {
 
 dependencies {
     implementation(libs.tensorflow.lite.task.audio)
+    implementation(libs.tensorflow.lite.gpu.delegate.plugin)
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
