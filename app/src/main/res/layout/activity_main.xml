@@ -21,11 +21,21 @@
         android:id="@+id/main_tv_audio_path"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Hello World!"
+        android:text="Select an audio file"
         app:layout_constraintBottom_toTopOf="@id/main_baseline_height_center"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/main_btn_select" />
+
+    <TextView
+        android:id="@+id/main_tv_time_duration"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text=""
+        app:layout_constraintBottom_toTopOf="@id/main_baseline_height_center"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/main_tv_audio_path" />
 
     <com.google.android.material.internal.BaselineLayout
         android:id="@+id/main_baseline_height_center"
