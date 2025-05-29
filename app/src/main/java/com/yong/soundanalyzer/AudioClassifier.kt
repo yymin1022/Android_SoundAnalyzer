@@ -76,6 +76,10 @@ class AudioClassifier {
                 // Classifier Option 구성
                 val classifierOption = AudioClassifier.AudioClassifierOptions.builder()
                     .setBaseOptions(baseOption.build())
+                    // 정해진 Label에 대해서 Category 필터링
+                    .setLabelAllowList(humanSoundLabels.toList())
+                    // 정확도가 Threshold 값보다 높은 경우 필터링
+                    .setScoreThreshold(CLASSIFY_THRESHOLD)
                     .build()
 
                 tfAudioClassifier = AudioClassifier.createFromFileAndOptions(context, TF_YAMNET_MODEL_FILENAME, classifierOption)
@@ -118,10 +122,6 @@ class AudioClassifier {
                 // Tensor Audio 처리 결과 확인
                 val classifyResult = tfAudioClassifier!!.classify(tensorAudio)
                 val speechCategory = classifyResult.firstOrNull()?.categories
-                    // 정해진 Label에 대해서 Category 필터링
-                    ?.filter { humanSoundLabels.contains(it.label.lowercase()) }
-                    // 정확도가 Threshold 값보다 높은 경우 필터링
-                    ?.filter { it.score > CLASSIFY_THRESHOLD }
 
                 // SampleRate를 기반으로 현재 PCM 데이터의 Duration 확인
                 val segmentDurationUs = (pcmData.size.toLong() * 1_000_000) / CLASSIFY_SAMPLE_RATE
