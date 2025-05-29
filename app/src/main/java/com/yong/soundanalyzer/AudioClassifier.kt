@@ -70,6 +70,7 @@ class AudioClassifier {
         Log.d(LOG_TAG_CLASSIFY, "Classifier Initializing (Mode $mode)")
         this.delegate = delegate
 
+        // Tensorflow Lite를 GPU에서 연산하기 위해서는 단일 Thread에서 동작해야함
         tfDispatcher = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
         CoroutineScope(tfDispatcher!!).launch {
             // Model File을 통해 YAMNet Classifier 생성
