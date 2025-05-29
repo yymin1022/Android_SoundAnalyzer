@@ -2,9 +2,10 @@ package com.yong.soundanalyzer
 
 import android.content.Context
 import android.util.Log
-import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CloseableCoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
@@ -17,6 +18,7 @@ import java.util.concurrent.Executors
 import kotlin.math.max
 import kotlin.math.min
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class AudioClassifier {
     companion object {
         // YAMNet Classify가 요구하는 Audio Sample Rate
@@ -54,7 +56,7 @@ class AudioClassifier {
     private val detectedRanges = mutableListOf<Pair<Long, Long>>()
 
     // Classifier 동작을 위한 Scope
-    private var tfDispatcher: CoroutineDispatcher = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
+    private var tfDispatcher: CloseableCoroutineDispatcher? = null
     private var isReady = false
 
     private var delegate: Delegate? = null
@@ -68,7 +70,8 @@ class AudioClassifier {
         Log.d(LOG_TAG_CLASSIFY, "Classifier Initializing (Mode $mode)")
         this.delegate = delegate
 
-        CoroutineScope(tfDispatcher).launch {
+        tfDispatcher = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
+        CoroutineScope(tfDispatcher!!).launch {
             // Model File을 통해 YAMNet Classifier 생성
             try {
                 // Tensorflow 기본 Option 구성 (GPU / NNAPI Delegate 설정을 위함)
@@ -103,13 +106,15 @@ class AudioClassifier {
         isReady = false
         tfAudioClassifier?.close()
         tfAudioClassifier = null
+        tfDispatcher?.close()
+        tfDispatcher = null
     }
 
     // Classifier 처리 시작
     fun startClassifier(
         pcmChannel: Channel<PcmData>
     ) {
-        CoroutineScope(tfDispatcher).launch {
+        CoroutineScope(tfDispatcher!!).launch {
             Log.d(LOG_TAG_CLASSIFY, "Classifier Starting")
             while(!isReady) delay(50)
 
