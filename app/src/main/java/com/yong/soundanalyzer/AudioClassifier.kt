@@ -41,8 +41,12 @@ class AudioClassifier {
 
     // YAMNet Model에서 필터링하기 위한 Sound Label
     private val humanSoundLabels = setOf(
-        "Speech", "Laughter", "cough", "baby_crying", "snoring",
-        "gasp", "sneeze", "yell", "screaming", "crying_sobbing"
+        "Speech", "Shout", "Yell", "Children shouting", "Babbling",
+        "Chatter", "Rapping", "Whispering", "Crowd", "Laughter",
+        "Giggle", "Snicker", "Belly laugh", "Baby laughter", "Crying, sobbing",
+        "Baby cry, infant cry", "Sigh", "Gasp", "Breathing", "Cough",
+        "Sneeze", "Hiccup", "Gargling", "Choir", "Humming",
+        "Chewing, mastication", "Biting", "Burping, eructation", "Whistling", "Snoring"
     )
 
     // Tensorflow Audio Classifier 인스턴스
