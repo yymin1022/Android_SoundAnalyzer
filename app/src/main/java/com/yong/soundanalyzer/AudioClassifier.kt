@@ -41,7 +41,7 @@ class AudioClassifier {
 
     // YAMNet Model에서 필터링하기 위한 Sound Label
     private val humanSoundLabels = setOf(
-        "speech", "laughter", "cough", "baby_crying", "snoring",
+        "Speech", "Laughter", "cough", "baby_crying", "snoring",
         "gasp", "sneeze", "yell", "screaming", "crying_sobbing"
     )
 
@@ -95,6 +95,12 @@ class AudioClassifier {
         return true
     }
 
+    fun destroy() {
+        isReady = false
+        tfAudioClassifier?.close()
+        tfAudioClassifier = null
+    }
+
     // Classifier 처리 시작
     fun startClassifier(
         pcmChannel: Channel<PcmData>
@@ -139,6 +145,7 @@ class AudioClassifier {
             // Classify 결과 후처리
             mergeClassifyResults(detectedRanges)
 
+            destroy()
             withContext(Dispatchers.Main) { delegate?.onFinish() }
         }
     }
